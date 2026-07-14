@@ -16,6 +16,15 @@ CORS(app)
 # Global variables for engines (initialized lazily to ensure models are downloaded first)
 tts_engine = None
 stt_engine = None
+engines_lock = threading.Lock()
+
+def init_engines():
+    global tts_engine, stt_engine
+    with engines_lock:
+        if tts_engine is None:
+            tts_engine = TTSEngine()
+        if stt_engine is None:
+            stt_engine = STTEngine()
 
 # Thread safety lock and SSE queues
 clients_lock = threading.Lock()
@@ -85,11 +94,7 @@ def run_drill_loop(my_drill_id):
     global current_drill, tts_engine, stt_engine, current_drill_id
     
     try:
-        # Initialize engines lazily on first run
-        if tts_engine is None:
-            tts_engine = TTSEngine()
-        if stt_engine is None:
-            stt_engine = STTEngine()
+        init_engines()
     except Exception as e:
         print(f"Error initializing speech engines: {e}")
         if current_drill_id == my_drill_id:
@@ -320,8 +325,8 @@ def run_drill_loop(my_drill_id):
             
         tts_engine.speak(feedback)
         
-        # Wait 2.5 seconds before automatically loading the next drill
-        time.sleep(2.5)
+        # Wait 1.0 second before automatically loading the next drill
+        time.sleep(1.0)
 
     if current_drill_id == my_drill_id:
         current_drill["active"] = False
@@ -370,8 +375,18 @@ def history():
 def run_flask():
     app.run(port=5000, debug=False, use_reloader=False)
 
+def load_engines_in_background():
+    print("Pre-warming speech engines (loading Vosk and Kokoro models) in background...")
+    try:
+        init_engines()
+        print("Speech engines pre-warmed successfully.")
+    except Exception as e:
+        print(f"Background engine pre-warming warning: {e}")
+
 async def main_loop():
     db.init_db()
+    # Eagerly load the speech engines in a background thread
+    threading.Thread(target=load_engines_in_background, daemon=True).start()
     flask_thread = threading.Thread(target=run_flask, daemon=True)
     flask_thread.start()
     print("Gwen core initialized. Zero-Cloud constraints met.")

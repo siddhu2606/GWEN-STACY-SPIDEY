@@ -23,6 +23,14 @@ Gwen runs 100% locally on the user's laptop/desktop:
 
 ## Setup and Usage
 
+### Prerequisites
+Before setting up the project, make sure you have:
+- **Python 3.8+** installed.
+- **Node.js (v18+)** installed.
+- **PortAudio** installed on your system (only required for Linux/macOS; Windows includes PortAudio binaries in the `sounddevice` package):
+  - On Ubuntu/Debian: `sudo apt-get install portaudio19-dev`
+  - On macOS (via Homebrew): `brew install portaudio`
+
 ### 1. Backend Setup
 1. Navigate to the `backend` directory.
 2. Create and activate a virtual environment:
@@ -34,7 +42,12 @@ Gwen runs 100% locally on the user's laptop/desktop:
    ```bash
    pip install -r requirements.txt
    ```
-4. Run the backend server:
+4. **Download the offline AI speech models** (required before running the server):
+   ```bash
+   python download_models.py
+   ```
+   *Note: This script downloads the local Kokoro-ONNX voice files and the Vosk speech-to-text models.*
+5. Run the backend server:
    ```bash
    python main.py
    ```

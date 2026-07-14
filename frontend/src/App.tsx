@@ -29,7 +29,7 @@ function LoadingScreen({ onComplete }: { onComplete: () => void }) {
 
   useEffect(() => {
     let start = performance.now();
-    const duration = 2500;
+    const duration = 500;
 
     const animate = (time: number) => {
       let progress = (time - start) / duration;
@@ -38,14 +38,14 @@ function LoadingScreen({ onComplete }: { onComplete: () => void }) {
       if (progress < 1) {
         requestAnimationFrame(animate);
       } else {
-        setTimeout(onComplete, 400);
+        setTimeout(onComplete, 100);
       }
     };
     requestAnimationFrame(animate);
 
     const wordInterval = setInterval(() => {
       setWordIndex(i => (i + 1) % words.length);
-    }, 800);
+    }, 150);
 
     return () => clearInterval(wordInterval);
   }, [onComplete]);
@@ -132,6 +132,42 @@ function App() {
   const [currentDrill, setCurrentDrill] = useState<CurrentDrill | null>(null);
   const [mmrChange, setMmrChange] = useState(0);
   const [error, setError] = useState('');
+
+  const [webcamActive, setWebcamActive] = useState(false);
+  const [webcamStream, setWebcamStream] = useState<MediaStream | null>(null);
+  const videoRef = React.useRef<HTMLVideoElement>(null);
+  const retroVideoRef = React.useRef<HTMLVideoElement>(null);
+
+  const startWebcam = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      setWebcamStream(stream);
+      setWebcamActive(true);
+      setTimeout(() => {
+        if (videoRef.current) videoRef.current.srcObject = stream;
+        if (retroVideoRef.current) retroVideoRef.current.srcObject = stream;
+      }, 200);
+    } catch (err) {
+      alert("Could not access webcam. Please check camera permissions.");
+      console.error(err);
+    }
+  };
+
+  const stopWebcam = () => {
+    if (webcamStream) {
+      webcamStream.getTracks().forEach(track => track.stop());
+      setWebcamStream(null);
+    }
+    setWebcamActive(false);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (webcamStream) {
+        webcamStream.getTracks().forEach(track => track.stop());
+      }
+    };
+  }, [webcamStream]);
 
   const BACKEND_URL = 'http://localhost:5000';
 
@@ -738,23 +774,82 @@ function App() {
                 <div className="relative z-10 max-w-xl mx-auto">
                   <div className="glass-card p-12 rounded-[40px] border-2 border-outline-variant/30 text-center relative shadow-2xl">
                     <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-surface-dim px-6 py-2 border border-outline-variant/30 rounded-full flex items-center gap-2">
-                      <span className="text-error font-label-sm text-label-sm tracking-widest uppercase flex items-center gap-2">
-                        <span className="material-symbols-outlined text-[16px]">lock</span> Forbidden Arena
-                      </span>
+                      {webcamActive ? (
+                        <span className="text-primary font-label-sm text-label-sm tracking-widest uppercase flex items-center gap-2">
+                          <span className="material-symbols-outlined text-[16px] animate-pulse">sensors</span> tracking active
+                        </span>
+                      ) : (
+                        <span className="text-error font-label-sm text-label-sm tracking-widest uppercase flex items-center gap-2">
+                          <span className="material-symbols-outlined text-[16px]">lock_open</span> Unlocked (Demo)
+                        </span>
+                      )}
                     </div>
                     <h3 className="font-display-lg text-display-lg-mobile text-on-surface mb-4 italic">Webcam Arena</h3>
                     <p className="text-on-surface-variant mb-12">Engage in real-time facial-tracking mental combat. High-stakes neuro-performance matches with AI adversaries.</p>
                     <div className="space-y-6">
-                      <div className="h-2 w-full bg-surface-container-highest rounded-full overflow-hidden">
-                        <div className="h-full bg-error w-1/4"></div>
-                      </div>
-                      <div className="flex justify-between text-on-surface-variant font-label-sm text-[10px] uppercase">
-                        <span>Current Progress: Level 4</span>
-                        <span>Requires: Level 10</span>
-                      </div>
-                      <button className="w-full py-4 rounded-2xl bg-surface-variant text-outline cursor-not-allowed font-label-sm tracking-widest uppercase" disabled>
-                        Locked
-                      </button>
+                      {webcamActive ? (
+                        <div className="space-y-6">
+                          <div className="relative aspect-video rounded-3xl overflow-hidden bg-black border-2 border-primary/50 shadow-inner">
+                            <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover scale-x-[-1]" />
+                            {/* Scanning laser line */}
+                            <div className="absolute left-0 right-0 h-0.5 bg-primary opacity-80 shadow-[0_0_8px_#cfbcff] animate-scan" style={{
+                              top: '0%'
+                            }} />
+                            {/* Target overlays */}
+                            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                              <div className="w-32 h-32 border border-dashed border-primary/40 rounded-full animate-spin" style={{ animationDuration: '12s' }} />
+                              <div className="absolute w-44 h-44 border-2 border-primary/20 rounded-3xl" />
+                              {/* Corner brackets */}
+                              <div className="absolute top-4 left-4 w-4 h-4 border-t-2 border-l-2 border-primary" />
+                              <div className="absolute top-4 right-4 w-4 h-4 border-t-2 border-r-2 border-primary" />
+                              <div className="absolute bottom-4 left-4 w-4 h-4 border-b-2 border-l-2 border-primary" />
+                              <div className="absolute bottom-4 right-4 w-4 h-4 border-b-2 border-r-2 border-primary" />
+                            </div>
+                            <div className="absolute bottom-2 left-4 text-left font-mono text-[10px] text-primary space-y-0.5 bg-black/60 px-2 py-1 rounded">
+                              <div>FEED: RAW_CAMERA</div>
+                              <div>RESOLUTION: HD</div>
+                              <div>FACIAL_TRACKING: LOCK_ON</div>
+                            </div>
+                          </div>
+                          {/* Live metrics */}
+                          <div className="grid grid-cols-3 gap-2 text-center text-xs font-mono text-on-surface-variant">
+                            <div className="bg-surface-container-high p-2 rounded-xl border border-outline-variant/30">
+                              <div className="text-[10px] text-outline uppercase">Focus Score</div>
+                              <div className="text-primary font-bold text-sm">98.4%</div>
+                            </div>
+                            <div className="bg-surface-container-high p-2 rounded-xl border border-outline-variant/30">
+                              <div className="text-[10px] text-outline uppercase">BPM (Sim)</div>
+                              <div className="text-error font-bold text-sm">74</div>
+                            </div>
+                            <div className="bg-surface-container-high p-2 rounded-xl border border-outline-variant/30">
+                              <div className="text-[10px] text-outline uppercase">Neural Load</div>
+                              <div className="text-tertiary font-bold text-sm">OPTIMAL</div>
+                            </div>
+                          </div>
+                          <button 
+                            onClick={stopWebcam}
+                            className="w-full py-4 rounded-2xl bg-error/10 hover:bg-error/20 text-error border border-error/30 font-label-sm tracking-widest uppercase transition-colors"
+                          >
+                            Disengage Arena
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="space-y-6">
+                          <div className="h-2 w-full bg-surface-container-highest rounded-full overflow-hidden">
+                            <div className="h-full bg-primary w-full"></div>
+                          </div>
+                          <div className="flex justify-between text-on-surface-variant font-label-sm text-[10px] uppercase">
+                            <span>Current Progress: Level 10</span>
+                            <span>Requires: Level 10</span>
+                          </div>
+                          <button 
+                            onClick={startWebcam}
+                            className="w-full py-4 rounded-2xl bg-gradient-to-r from-primary to-secondary text-on-primary hover:opacity-90 font-label-sm tracking-widest uppercase transition-opacity flex items-center justify-center gap-2"
+                          >
+                            <span className="material-symbols-outlined text-[18px]">videocam</span> [DEMO BYPASS] Enter Arena
+                          </button>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -1001,18 +1096,57 @@ function App() {
               </section>
 
               {/* Locked Feature Section */}
-              <section className="arcade-card locked-stage">
-                <div className="lock-banner class-font">🔒 FORBIDDEN ARENA</div>
+              <section className="arcade-card locked-stage" style={{ opacity: 1 }}>
+                <div className="lock-banner class-font" style={{ color: webcamActive ? 'var(--retro-green)' : 'var(--retro-red)' }}>
+                  {webcamActive ? '📡 WEBCAM SCANNER ACTIVE' : '🔓 FORBIDDEN ARENA (DEMO)'}
+                </div>
                 <h3 style={{ fontSize: '1.2rem', color: '#fff' }}>WEBCAM ARENA</h3>
-                <p style={{ color: '#ccc', marginTop: '5px' }}>Engage in real-time facial-tracking mental combat with AI adversaries.</p>
+                <p style={{ color: '#ccc', marginTop: '5px', marginBottom: '15px' }}>Engage in real-time facial-tracking mental combat with AI adversaries.</p>
                 
-                <div className="pixel-progress-bar">
-                  <div className="pixel-progress-fill" style={{ width: '40%' }}></div>
-                </div>
-                <div style={{ fontSize: '1rem', color: 'var(--retro-red)', marginBottom: '15px' }}>
-                  CURRENT PROGRESS: LVL 4 / REQUIRES: LVL 10
-                </div>
-                <button className="btn-retro" style={{ backgroundColor: '#444', borderColor: '#888', cursor: 'not-allowed' }} disabled>[ LOCKED ]</button>
+                {webcamActive ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                    <div style={{ position: 'relative', overflow: 'hidden', border: '4px solid var(--retro-cyan)', backgroundColor: '#000', lineHeight: 0 }}>
+                      <video ref={retroVideoRef} autoPlay playsInline muted style={{ width: '100%', height: 'auto', transform: 'scaleX(-1)' }} />
+                      {/* Retro green scanline */}
+                      <div className="absolute left-0 right-0 h-1 bg-retro-green opacity-50 shadow-[0_0_4px_#50fa7b] animate-scan" style={{ top: '0%' }} />
+                      {/* Corner markings */}
+                      <div style={{ position: 'absolute', top: '10px', left: '10px', width: '15px', height: '15px', borderTop: '3px solid var(--retro-green)', borderLeft: '3px solid var(--retro-green)' }} />
+                      <div style={{ position: 'absolute', top: '10px', right: '10px', width: '15px', height: '15px', borderTop: '3px solid var(--retro-green)', borderRight: '3px solid var(--retro-green)' }} />
+                      <div style={{ position: 'absolute', bottom: '10px', left: '10px', width: '15px', height: '15px', borderBottom: '3px solid var(--retro-green)', borderLeft: '3px solid var(--retro-green)' }} />
+                      <div style={{ position: 'absolute', bottom: '10px', right: '10px', width: '15px', height: '15px', borderBottom: '3px solid var(--retro-green)', borderRight: '3px solid var(--retro-green)' }} />
+                    </div>
+                    {/* Retro metrics */}
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px', fontFamily: "'VT323', monospace", fontSize: '1.2rem', color: '#fff' }}>
+                      <div className="arcade-card" style={{ padding: '5px 10px', marginBottom: 0, border: '2px solid var(--retro-cyan)' }}>
+                        <div style={{ fontSize: '0.8rem', color: '#888' }}>FOCUS</div>
+                        <div style={{ color: 'var(--accent-yellow)' }}>98.4%</div>
+                      </div>
+                      <div className="arcade-card" style={{ padding: '5px 10px', marginBottom: 0, border: '2px solid var(--retro-cyan)' }}>
+                        <div style={{ fontSize: '0.8rem', color: '#888' }}>HEART</div>
+                        <div style={{ color: 'var(--retro-red)' }}>74 BPM</div>
+                      </div>
+                      <div className="arcade-card" style={{ padding: '5px 10px', marginBottom: 0, border: '2px solid var(--retro-cyan)' }}>
+                        <div style={{ fontSize: '0.8rem', color: '#888' }}>SYNC</div>
+                        <div style={{ color: 'var(--retro-green)' }}>100%</div>
+                      </div>
+                    </div>
+                    <button className="btn-retro btn-red" style={{ width: '100%' }} onClick={stopWebcam}>
+                      [ DISENGAGE WEBCAM ]
+                    </button>
+                  </div>
+                ) : (
+                  <div>
+                    <div className="pixel-progress-bar">
+                      <div className="pixel-progress-fill" style={{ width: '100%', backgroundColor: 'var(--retro-green)' }}></div>
+                    </div>
+                    <div style={{ fontSize: '1rem', color: 'var(--retro-green)', marginBottom: '15px' }}>
+                      CURRENT PROGRESS: LVL 10 / REQUIRES: LVL 10
+                    </div>
+                    <button className="btn-retro btn-green" style={{ width: '100%' }} onClick={startWebcam}>
+                      🎮 [BYPASS LOCK] ENTER ARENA
+                    </button>
+                  </div>
+                )}
               </section>
             </div>
           )}
